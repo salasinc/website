@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Salas Concrete — Contract Builder</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: #F1F5F9; }
+    input, textarea { transition: border-color .15s, box-shadow .15s; }
+    input:focus, textarea:focus {
+      border-color: #1B3A6B !important;
+      box-shadow: 0 0 0 3px rgba(27,58,107,.12) !important;
+      outline: none;
+    }
+    @media (max-width: 600px) {
+      .two-col { grid-template-columns: 1fr !important; }
+      .phase-grid { grid-template-columns: 1fr !important; }
+      .sig-grid { grid-template-columns: 1fr !important; }
+    }
+    @media print {
+      .np { display: none !important; }
+      body { background: white; }
+      .co { padding: 0.6in 0.75in !important; max-width: none !important; font-size: 9pt !important; }
+      .pbr { page-break-before: always; }
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState } = React;
+
+    const N   = "#1B3A6B";
+    const G   = "#5A6475";
+    const NL  = "#E8EDF5";
+    const GL  = "#F0F1F3";
+    const IN  = "#FAFBFC";
+
+    /* ── small helpers ──────────────────────────────────────────────────── */
+    function SecBar({ n, t, brk }) {
+      return (
+        <div style={{
+          background: N, color: "#fff", padding: "7px 12px",
+          fontWeight: "bold", fontSize: "8.5pt", textTransform: "uppercase",
+          letterSpacing: ".5px", marginTop: brk ? 0 : 14, marginBottom: 7,
+          pageBreakBefore: brk ? "always" : "auto"
+        }}>{n} — {t}</div>
+      );
+    }
+
+    function IRow({ label, val }) {
+      return (
+        <tr>
+          <td style={{ border:"1px solid #ccc", background:NL, padding:"5px 8px",
+            width:"27%", fontWeight:"bold", color:N, fontSize:"8.5pt", verticalAlign:"middle" }}>{label}</td>
+          <td style={{ border:"1px solid #ccc", padding:"5px 8px", fontSize:"8.5pt" }}>{val || "\u00a0"}</td>
+        </tr>
+      );
+    }
+
+    function IRow2({ l1, v1, l2, v2 }) {
+      return (
+        <tr>
+          <td style={{ border:"1px solid #ccc", background:NL, padding:"5px 8px",
+            width:"20%", fontWeight:"bold", color:N, fontSize:"8.5pt" }}>{l1}</td>
+          <td style={{ border:"1px solid #ccc", padding:"5px 8px", width:"30%", fontSize:"8.5pt" }}>{v1||"\u00a0"}</td>
+          <td style={{ border:"1px solid #ccc", background:NL, padding:"5px 8px",
+            width:"20%", fontWeight:"bold", color:N, fontSize:"8.5pt" }}>{l2}</td>
+          <td style={{ border:"1px solid #ccc", padding:"5px 8px", width:"30%", fontSize:"8.5pt" }}>{v2||"\u00a0"}</td>
+        </tr>
+      );
+    }
+
+    function InitRow({ label, text }) {
+      return (
+        <table style={{ width:"100%", borderCollapse:"collapse", marginBottom:6 }}>
+          <tbody>
+            <tr>
+              <td style={{ border:`1px solid ${N}`, background:NL, padding:"8px 10px", width:"80%", fontSize:"8pt" }}>
+                <strong style={{ color:N }}>{label}  |  </strong>{text}
+              </td>
+              <td style={{ border:`1px solid ${N}`, padding:"8px 10px", width:"20%", textAlign:"center", verticalAlign:"middle" }}>
+                <div style={{ fontSize:"8pt", color:"#888", marginBottom:4 }}>Initials</div>
+                <div style={{ borderBottom:`1px solid ${N}`, height:20 }} />
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      );
+    }
+
+    function SigLine({ label }) {
+      return (
+        <div style={{ marginBottom:14 }}>
+          <div style={{ borderBottom:`1px solid ${N}`, height:28, marginBottom:3 }} />
+          <div style={{ fontSize:"7.5pt", fontWeight:"bold", color:N }}>{label}</div>
+        </div>
+      );
+    }
+
+    function fmt(v) {
+      if (!v) return "";
+      const n = parseFloat(v.toString().replace(/[^0-9.]/g,""));
+      if (isNaN(n)) return v;
+      return "$" + n.toLocaleString("en-US", { minimumFractionDigits:2, maximumFractionDigits:2 });
+    }
+
+    const today = new Date().toLocaleDateString("en-US",{ month:"2-digit", day:"2-digit", year:"numeric" });
+
+    /* ── main app ───────────────────────────────────────────────────────── */
+    function App() {
+      const [tab, setTab] = useState("form");
+      const [d, setD] = useState({
+        ownerName:"", address:"", csz:"", phone:"", email:"",
+        contractDate: today, validFor:"30 days from date above",
+        startDate:"", completion:"",
+        scope:"",
+        price:"", discount:"", finance:"NONE", down:"",
+        stamped: false,
+        phases:[
+          { phase:"Demo Day — due by 9:00 AM",  work:"Demolition, haul-off, subgrade prep",    amt:"" },
+          { phase:"",                            work:"",                                        amt:"" },
+          { phase:"Form Day — due by 9:00 AM",  work:"Forming, cantilever, drain, pour",        amt:"" },
+          { phase:"Final Walkthrough",           work:"Completion, punch list sign-off",         amt:"" },
+        ],
+      });
+
+      const upd  = (f,v) => setD(p=>({...p,[f]:v}));
+      const updP = (i,f,v) => { const ph=[...d.phases]; ph[i]={...ph[i],[f]:v}; setD(p=>({...p,phases:ph})); };
+
+      const totalPrice = () => {
+        const p  = parseFloat((d.price||"0").replace(/[^0-9.]/g,""))||0;
+        const di = parseFloat((d.discount||"0").replace(/[^0-9.]/g,""))||0;
+        return p - di;
+      };
+
+      const sn = (n) => d.stamped ? n : n-1;
+
+      const inp = {
+        width:"100%", padding:"11px 12px", border:"1.5px solid #CBD5E1",
+        borderRadius:7, fontSize:15, fontFamily:"inherit",
+        backgroundColor:IN, display:"block"
+      };
+      const lbl = { display:"block", fontWeight:"700", color:N, marginBottom:4, fontSize:13 };
+      const fg  = { marginBottom:14 };
+      const card = {
+        background:"#fff", borderRadius:10, padding:20, marginBottom:14,
+        boxShadow:"0 1px 4px rgba(0,0,0,.07)"
+      };
+
+      return (
+        <div style={{ fontFamily:"system-ui,-apple-system,sans-serif", background:"#F1F5F9", minHeight:"100vh" }}>
+
+          {/* ── top bar ── */}
+          <div className="np" style={{
+            background:N, color:"#fff", padding:"13px 20px",
+            position:"sticky", top:0, zIndex:100,
+            boxShadow:"0 2px 8px rgba(0,0,0,.25)"
+          }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", maxWidth:860, margin:"0 auto" }}>
+              <div>
+                <div style={{ fontWeight:"800", fontSize:16 }}>Salas Concrete Inc.</div>
+                <div style={{ fontSize:11, color:"#B0B8CC" }}>Contract Builder</div>
+              </div>
+              {tab==="contract" && (
+                <button onClick={()=>window.print()} style={{
+                  background:"#fff", color:N, border:"none", borderRadius:7,
+                  padding:"9px 18px", fontWeight:"700", fontSize:14, cursor:"pointer"
+                }}>🖨 Print / Save PDF</button>
+              )}
+            </div>
+          </div>
+
+          {/* ── tabs ── */}
+          <div className="np" style={{
+            background:"#fff", borderBottom:"2px solid #E2E8F0",
+            position:"sticky", top:57, zIndex:99
+          }}>
+            <div style={{ maxWidth:860, margin:"0 auto", display:"flex" }}>
+              {[["form","✏️  Fill In"],["contract","📄  Preview & Print"]].map(([t,lb])=>(
+                <button key={t} onClick={()=>setTab(t)} style={{
+                  flex:1, padding:"13px 8px", border:"none", fontSize:14, cursor:"pointer",
+                  background: tab===t ? NL : "#fff",
+                  color: tab===t ? N : "#666",
+                  fontWeight: tab===t ? "700" : "400",
+                  borderBottom: tab===t ? `3px solid ${N}` : "3px solid transparent"
+                }}>{lb}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* ════════════════════════════════════════════════════════════
+              FORM TAB
+          ════════════════════════════════════════════════════════════ */}
+          {tab==="form" && (
+            <div className="np" style={{ maxWidth:860, margin:"0 auto", padding:"20px 16px 40px" }}>
+
+              {/* customer info */}
+              <div style={card}>
+                <div style={{ fontWeight:"700", color:N, fontSize:15, borderBottom:`2px solid ${G}`, paddingBottom:8, marginBottom:16 }}>Customer &amp; Job Info</div>
+                <div style={fg}><label style={lbl}>Owner Name(s)</label><input style={inp} value={d.ownerName} onChange={e=>upd("ownerName",e.target.value)} placeholder="Full legal name(s)" /></div>
+                <div style={fg}><label style={lbl}>Property Address</label><input style={inp} value={d.address} onChange={e=>upd("address",e.target.value)} placeholder="Street address where work is performed" /></div>
+                <div className="two-col" style={{ ...fg, display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+                  <div><label style={lbl}>City / State / ZIP</label><input style={inp} value={d.csz} onChange={e=>upd("csz",e.target.value)} placeholder="Fresno, CA 93720" /></div>
+                  <div><label style={lbl}>Owner Phone</label><input style={inp} value={d.phone} onChange={e=>upd("phone",e.target.value)} placeholder="(559) 000-0000" /></div>
+                </div>
+                <div style={fg}><label style={lbl}>Owner Email</label><input style={inp} value={d.email} onChange={e=>upd("email",e.target.value)} placeholder="owner@email.com" /></div>
+                <div className="two-col" style={{ ...fg, display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+                  <div><label style={lbl}>Contract Date</label><input style={inp} value={d.contractDate} onChange={e=>upd("contractDate",e.target.value)} /></div>
+                  <div><label style={lbl}>Approx. Start Date</label><input style={inp} value={d.startDate} onChange={e=>upd("startDate",e.target.value)} placeholder="MM/DD/YYYY" /></div>
+                </div>
+                <div style={fg}><label style={lbl}>Approx. Completion</label><input style={inp} value={d.completion} onChange={e=>upd("completion",e.target.value)} placeholder="e.g. 3–4 weeks from start date" /></div>
+              </div>
+
+              {/* scope */}
+              <div style={card}>
+                <div style={{ fontWeight:"700", color:N, fontSize:15, borderBottom:`2px solid ${G}`, paddingBottom:8, marginBottom:16 }}>Scope of Work</div>
+                <label style={lbl}>Describe all work, materials, and equipment to be installed</label>
+                <textarea style={{ ...inp, minHeight:200, resize:"vertical", lineHeight:1.6, marginTop:4 }}
+                  value={d.scope} onChange={e=>upd("scope",e.target.value)}
+                  placeholder={"Full demolition and haul-off of approximately ___ SF of existing pool deck.\nComplete subgrade preparation — grading, leveling, compaction, and sand base.\nNew concrete poured at approximately 3.75 inches thick with fiber reinforcement.\nBroom finish.\nControl joints strategically placed for crack control.\nApproximately ___ LF of cantilever edge around pool and spa.\nApproximately ___ LF of deck drain.\nJob site left clean and professional upon completion."} />
+              </div>
+
+              {/* pricing */}
+              <div style={card}>
+                <div style={{ fontWeight:"700", color:N, fontSize:15, borderBottom:`2px solid ${G}`, paddingBottom:8, marginBottom:16 }}>Pricing</div>
+                <div className="two-col" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+                  <div style={fg}><label style={lbl}>Contract Price</label><input style={inp} value={d.price} onChange={e=>upd("price",e.target.value)} placeholder="$0.00" /></div>
+                  <div style={fg}><label style={lbl}>Discount / Adjustment</label><input style={inp} value={d.discount} onChange={e=>upd("discount",e.target.value)} placeholder="$0.00 or leave blank" /></div>
+                  <div style={fg}><label style={lbl}>Finance Charge</label><input style={inp} value={d.finance} onChange={e=>upd("finance",e.target.value)} placeholder="NONE" /></div>
+                  <div style={fg}><label style={lbl}>Down Payment (max $1,000 or 10%)</label><input style={inp} value={d.down} onChange={e=>upd("down",e.target.value)} placeholder="$0.00" /></div>
+                </div>
+                {totalPrice()>0 && (
+                  <div style={{ background:N, color:"#fff", padding:"12px 16px", borderRadius:7, textAlign:"right", fontSize:16, fontWeight:"800" }}>
+                    TOTAL: {fmt(totalPrice().toString())}
+                  </div>
+                )}
+              </div>
+
+              {/* payment schedule */}
+              <div style={card}>
+                <div style={{ fontWeight:"700", color:N, fontSize:15, borderBottom:`2px solid ${G}`, paddingBottom:8, marginBottom:16 }}>Payment Schedule</div>
+                {d.phases.map((ph,i)=>(
+                  <div key={i} style={{ background:"#F8FAFC", borderRadius:7, padding:12, marginBottom:10, border:"1px solid #E2E8F0" }}>
+                    <div style={{ fontWeight:"700", color:N, marginBottom:8, fontSize:13 }}>Phase {i+1}</div>
+                    <div className="phase-grid" style={{ display:"grid", gridTemplateColumns:"2fr 2fr 1fr", gap:8 }}>
+                      <div><label style={{ ...lbl, fontSize:12 }}>Phase Name</label><input style={{ ...inp, fontSize:13, padding:"8px 10px" }} value={ph.phase} onChange={e=>updP(i,"phase",e.target.value)} /></div>
+                      <div><label style={{ ...lbl, fontSize:12 }}>Work Included</label><input style={{ ...inp, fontSize:13, padding:"8px 10px" }} value={ph.work} onChange={e=>updP(i,"work",e.target.value)} /></div>
+                      <div><label style={{ ...lbl, fontSize:12 }}>Amount</label><input style={{ ...inp, fontSize:13, padding:"8px 10px" }} value={ph.amt} onChange={e=>updP(i,"amt",e.target.value)} placeholder="$" /></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* options */}
+              <div style={card}>
+                <div style={{ fontWeight:"700", color:N, fontSize:15, borderBottom:`2px solid ${G}`, paddingBottom:8, marginBottom:16 }}>Options</div>
+                <label style={{ display:"flex", alignItems:"center", gap:10, cursor:"pointer", fontSize:14 }}>
+                  <input type="checkbox" checked={d.stamped} onChange={e=>upd("stamped",e.target.checked)} style={{ width:18, height:18, accentColor:N }} />
+                  <span style={{ color:N, fontWeight:"700" }}>Include Stamped Concrete Expectations section</span>
+                </label>
+              </div>
+
+              <button onClick={()=>setTab("contract")} style={{
+                width:"100%", padding:18, background:N, color:"#fff", border:"none",
+                borderRadius:9, fontSize:16, fontWeight:"800", cursor:"pointer", letterSpacing:".5px"
+              }}>GENERATE CONTRACT →</button>
+            </div>
+          )}
+
+          {/* ════════════════════════════════════════════════════════════
+              CONTRACT TAB
+          ════════════════════════════════════════════════════════════ */}
+          {tab==="contract" && (
+            <div>
+              <div className="np" style={{
+                background:"#fff", padding:"10px 20px", borderBottom:"1px solid #E2E8F0",
+                display:"flex", gap:10, alignItems:"center", flexWrap:"wrap"
+              }}>
+                <button onClick={()=>window.print()} style={{ padding:"10px 22px", background:N, color:"#fff", border:"none", borderRadius:7, fontSize:14, fontWeight:"700", cursor:"pointer" }}>🖨 Print / Save PDF</button>
+                <button onClick={()=>setTab("form")} style={{ padding:"10px 18px", background:"#fff", color:N, border:`2px solid ${N}`, borderRadius:7, fontSize:14, cursor:"pointer", fontWeight:"600" }}>← Edit</button>
+                <span style={{ color:"#666", fontSize:12 }}>In print dialog → "Save as PDF" for a digital copy</span>
+              </div>
+
+              {/* ── CONTRACT OUTPUT ── */}
+              <div className="co" style={{ background:"#fff", maxWidth:816, margin:"0 auto", padding:"32px 40px", fontSize:"9pt", color:"#1A1A1A", lineHeight:1.45, fontFamily:"Arial, sans-serif" }}>
+
+                {/* Header */}
+                <div style={{ background:N, color:"#fff", padding:"20px 28px", marginBottom:20, textAlign:"center" }}>
+                  <div style={{ fontSize:"21pt", fontWeight:"bold", letterSpacing:1 }}>SALAS CONCRETE INC.</div>
+                  <div style={{ fontSize:"11pt", color:"#C8CDD8", fontStyle:"italic", marginTop:3 }}>Family Owned. Valley Grown. Since 1980</div>
+                  <div style={{ fontSize:"8.5pt", color:"#B0B8CC", marginTop:5 }}>CA License #388578  |  (559) 785-DECK / (559) 785-3325  |  salasconcrete.com</div>
+                  <div style={{ fontSize:"8.5pt", color:"#B0B8CC" }}>1103 Brookhaven Dr #108, Clovis, CA 93612  |  aaron@salasconcrete.com</div>
+                </div>
+
+                <div style={{ textAlign:"center", marginBottom:14 }}>
+                  <div style={{ fontSize:"15pt", fontWeight:"bold", color:N }}>HOME IMPROVEMENT CONTRACT</div>
+                  <div style={{ fontSize:"10pt", color:G }}>Concrete Services</div>
+                  <div style={{ fontSize:"8pt", color:"#888", fontStyle:"italic", borderBottom:`2px solid ${G}`, paddingBottom:6, marginTop:3 }}>California Business &amp; Professions Code Section 7159 Compliant</div>
+                </div>
+
+                <div style={{ border:`1px solid ${N}`, background:NL, padding:"9px 13px", marginBottom:14, fontWeight:"bold" }}>
+                  You are entitled to a completely filled-in copy of this agreement, signed by both you and the contractor, before any work may be started.
+                </div>
+
+                {/* S1 */}
+                <SecBar n="1" t="Contractor / Owner / Job Information" />
+                <table style={{ width:"100%", borderCollapse:"collapse", marginBottom:8 }}><tbody>
+                  <tr>
+                    <td style={{ border:"1px solid #ccc", background:NL, padding:"5px 8px", width:"27%", fontWeight:"bold", color:N, fontSize:"8.5pt" }}>Contractor</td>
+                    <td style={{ border:"1px solid #ccc", padding:"5px 8px", fontSize:"8.5pt" }}>Salas Concrete Inc.  |  CA License #388578  |  (559) 785-DECK / (559) 785-3325  |  1103 Brookhaven Dr #108, Clovis, CA 93612</td>
+                  </tr>
+                  <IRow label="Owner Name(s)" val={d.ownerName} />
+                  <IRow label="Property Address" val={d.address} />
+                  <IRow label="City / State / ZIP" val={d.csz} />
+                  <IRow label="Owner Phone" val={d.phone} />
+                  <IRow label="Owner Email" val={d.email} />
+                  <IRow2 l1="Contract Date" v1={d.contractDate} l2="Valid For" v2={d.validFor} />
+                  <IRow2 l1="Approx. Start Date" v1={d.startDate} l2="Approx. Completion" v2={d.completion} />
+                </tbody></table>
+                <div style={{ border:`1px solid ${G}`, background:GL, padding:"7px 11px", marginBottom:14, fontSize:"8pt" }}>
+                  <strong style={{color:N}}>Notice of Cancellation may be delivered to:</strong>  Salas Concrete Inc. — Attn: Aaron Salas  |  1103 Brookhaven Dr #108, Clovis, CA 93612  |  info@salasconcrete.com  |  (559) 785-DECK / (559) 785-3325
+                </div>
+
+                {/* S2 */}
+                <SecBar n="2" t="Description of the Project and Significant Materials / Equipment" />
+                <p>Contractor will furnish all labor, supervision, coordination, equipment, and materials necessary to complete the work described below in a good and workmanlike manner. All quantities are approximate and based on field measurements at time of estimate.</p>
+                <div style={{ fontWeight:"bold", color:N, margin:"8px 0 5px" }}>Scope of Work</div>
+                <div style={{ border:`1px solid ${G}`, background:IN, padding:"10px 12px", minHeight:90, marginBottom:8, whiteSpace:"pre-wrap" }}>{d.scope||"\u00a0"}</div>
+                <div style={{ border:`1px solid ${N}`, background:NL, padding:"10px 13px", marginBottom:14, fontSize:"8pt" }}>
+                  <strong style={{color:N}}>Scope of Work — What Is Included and What Is Not</strong><br /><br />
+                  The scope of work described in this contract represents the complete and entire agreement between the Owner and Salas Concrete Inc. for this project. Only the work, materials, and services expressly listed above are included in the contract price. Any item, task, material, or service not specifically described in this contract is excluded and will not be performed as part of this project. If the Owner requests any work beyond what is described above, such work will not be performed until a written Change Order has been signed by both parties and payment received in full.<br /><br />
+                  <strong>No verbal conversations, text messages, emails, or oral representations made before or during the project shall expand the scope of work or obligate Salas Concrete Inc. to perform any work not contained in this written contract or a signed written Change Order. Owner acknowledges they have read and understood the full scope of work as written.</strong>
+                </div>
+
+                {/* S3 */}
+                <SecBar n="3" t="Contract Price" />
+                <table style={{ width:"100%", borderCollapse:"collapse", marginBottom:8 }}><tbody>
+                  <tr>
+                    <td style={{ border:"1px solid #ccc", background:NL, padding:"6px 10px", width:"70%" }}>Contract Price</td>
+                    <td style={{ border:"1px solid #ccc", padding:"6px 10px", textAlign:"right" }}>{fmt(d.price)}</td>
+                  </tr>
+                  {d.discount && parseFloat(d.discount.replace(/[^0-9.]/g,""))>0 && (
+                    <tr>
+                      <td style={{ border:"1px solid #ccc", background:GL, padding:"6px 10px" }}>Discount / Adjustment</td>
+                      <td style={{ border:"1px solid #ccc", background:GL, padding:"6px 10px", textAlign:"right" }}>- {fmt(d.discount)}</td>
+                    </tr>
+                  )}
+                  <tr>
+                    <td style={{ border:`1px solid ${N}`, background:N, color:"#fff", padding:"7px 10px", fontWeight:"bold" }}>TOTAL CONTRACT PRICE</td>
+                    <td style={{ border:`1px solid ${N}`, background:N, color:"#fff", padding:"7px 10px", textAlign:"right", fontWeight:"bold" }}>{totalPrice()>0?fmt(totalPrice().toString()):"\u00a0"}</td>
+                  </tr>
+                </tbody></table>
+                <p><strong style={{color:N}}>Finance Charge:</strong> {d.finance||"NONE"}</p>
+
+                {/* S4 */}
+                <SecBar n="4" t="Down Payment" />
+                <p><strong style={{color:N}}>Down Payment Amount:</strong> {fmt(d.down)}</p>
+                <p style={{fontWeight:"bold"}}>THE DOWN PAYMENT MAY NOT EXCEED $1,000 OR 10 PERCENT OF THE CONTRACT PRICE, WHICHEVER IS LESS.</p>
+
+                {/* S5 */}
+                <SecBar n="5" t="Schedule of Progress Payments" />
+                <p style={{fontWeight:"bold"}}>The schedule of progress payments must specifically describe each phase of work, including the type and amount of work or services scheduled to be supplied in each phase, along with the amount of each proposed progress payment. IT IS AGAINST THE LAW FOR A CONTRACTOR TO COLLECT PAYMENT FOR WORK NOT YET COMPLETED, OR FOR MATERIALS NOT YET DELIVERED. HOWEVER, A CONTRACTOR MAY REQUIRE A DOWN PAYMENT.</p>
+                <table style={{ width:"100%", borderCollapse:"collapse", marginBottom:8 }}><thead>
+                  <tr style={{ background:N, color:"#fff" }}>
+                    <th style={{ border:`1px solid ${N}`, padding:"6px 8px", width:"5%" }}>#</th>
+                    <th style={{ border:`1px solid ${N}`, padding:"6px 8px", width:"33%", textAlign:"left" }}>Phase / Milestone</th>
+                    <th style={{ border:`1px solid ${N}`, padding:"6px 8px", width:"42%", textAlign:"left" }}>Work Included</th>
+                    <th style={{ border:`1px solid ${N}`, padding:"6px 8px", width:"20%", textAlign:"right" }}>Amount Due</th>
+                  </tr>
+                </thead><tbody>
+                  {d.phases.map((ph,i)=>(
+                    <tr key={i} style={{background:i%2===0?GL:"#fff"}}>
+                      <td style={{ border:"1px solid #ccc", padding:"6px 8px", textAlign:"center" }}>{i+1}</td>
+                      <td style={{ border:"1px solid #ccc", padding:"6px 8px" }}>{ph.phase}</td>
+                      <td style={{ border:"1px solid #ccc", padding:"6px 8px" }}>{ph.work}</td>
+                      <td style={{ border:"1px solid #ccc", padding:"6px 8px", textAlign:"right" }}>{fmt(ph.amt)}</td>
+                    </tr>
+                  ))}
+                  <tr style={{background:N, color:"#fff", fontWeight:"bold"}}>
+                    <td colSpan={3} style={{ border:`1px solid ${N}`, padding:"6px 8px" }}>TOTAL</td>
+                    <td style={{ border:`1px solid ${N}`, padding:"6px 8px", textAlign:"right" }}>{totalPrice()>0?fmt(totalPrice().toString()):""}</td>
+                  </tr>
+                </tbody></table>
+                <p>All payments are due by 9:00 AM on the applicable day. Work will not begin each phase until payment for that phase is received. A 3% processing fee applies to all credit card payments. Financing available through Hearth and Lyon Financial — ask us about your options before signing.</p>
+
+                {/* S6 */}
+                <div className="pbr">
+                <SecBar n="6" t="Concrete Characteristics &amp; Workmanship Acknowledgment" />
+                <p>Concrete is a natural construction material. The items below describe normal, expected characteristics of concrete flatwork that are not defects and are not covered under warranty. Owner must read each item carefully and initial each box. This contract is not binding until all initials are provided.</p>
+                <InitRow label="CRACKING" text="Concrete will crack. Hairline cracks, shrinkage cracks, and minor surface cracks are a normal, expected result of the curing process. They are not structural defects. Per CSLB standards, Salas Concrete Inc. does not warranty against non-structural cracks less than 1/4 inch in width. Control joints are strategically placed to guide cracking but cannot prevent it entirely. Owner acknowledges cracking as a known and accepted characteristic of concrete flatwork." />
+                <InitRow label="DISCOLORATION &amp; COLOR VARIATION" text="Concrete will not cure to a perfectly uniform color. Lighter patches, darker patches, blotchy areas, tonal variation, and shadowing are normal results of the curing process and are affected by sun exposure, wind, humidity, water content, subgrade moisture, and finishing technique. These variations are not defects. Salas Concrete Inc. does not warranty against color or tonal variation in any standard or decorative finish. Owner acknowledges discoloration and color variation as known and accepted characteristics of concrete." />
+                <InitRow label="SURFACE TEXTURE VARIATION" text="Broom finish concrete may appear rougher or smoother in certain areas depending on finishing conditions. Areas near walls, steps, or tight transitions may have reduced texture. Patchwork repairs smaller than a nickel in diameter are not covered under warranty. Owner acknowledges texture variation as a known and accepted characteristic of concrete flatwork." />
+                <InitRow label="EFFLORESCENCE" text="White mineral deposits may appear on the concrete surface as it cures or following rain. This is caused by water carrying natural salts to the surface and is not a defect. It typically diminishes with normal weathering over time. Owner acknowledges efflorescence as a known and accepted characteristic of concrete." />
+                <InitRow label="POOL DECK &amp; SITE CONDITIONS" text="Salas Concrete Inc. is not responsible for damage to pool skimmers, pool tile, plumbing lines, underground utilities, irrigation lines, or other improvements not clearly marked or disclosed before work begins. Owner is responsible for marking all underground utilities, irrigation, and pool-related plumbing prior to demolition. Owner acknowledges this responsibility and agrees Salas Concrete Inc. bears no liability for unmarked underground improvements." />
+                </div>
+
+                {/* S7 */}
+                <div className="pbr">
+                <SecBar n="7" t="Demolition Liability Disclaimer &amp; Acknowledgment" />
+                <p>Demolition of existing concrete, hardscape, and surrounding site improvements is inherently unpredictable. By signing below, Owner acknowledges and agrees to the following conditions regarding liability during the demolition phase of this project.</p>
+                <InitRow label="STUCCO, SIDING &amp; EXTERIOR SURFACES" text="During demolition and concrete removal, existing stucco, painted surfaces, wood siding, stone veneer, brick, or any other exterior finish material on the home, walls, planters, raised foundations, or surrounding structures may crack, chip, spall, or sustain cosmetic damage as a result of vibration, saw cutting, or jackhammer activity. This is a known and unavoidable risk. Salas Concrete Inc. is not responsible for any resulting damage. Owner accepts this risk and holds Salas Concrete Inc. harmless for any such damage." />
+                <InitRow label="UNDERGROUND UTILITIES, PIPES &amp; IRRIGATION" text="Owner is solely responsible for locating, marking, and communicating the location of all underground utilities, gas lines, electrical conduit, water lines, sewer lines, irrigation pipes, pool plumbing, and any other subsurface improvements prior to demolition. Salas Concrete Inc. will call 811 (Dig Alert) where required. However, 811 does not locate privately-installed irrigation, pool plumbing, or other non-utility lines. Any damage to unmarked or privately-installed underground lines is the sole responsibility of the Owner." />
+                <InitRow label="EXISTING CRACKS, SETTLEMENT &amp; PRE-EXISTING CONDITIONS" text="Salas Concrete Inc. is not responsible for pre-existing cracks, settlement, deterioration, or structural deficiencies in the home's foundation, footings, retaining walls, pool shell, pool equipment, or any other existing site improvements. Demolition may reveal or expose pre-existing conditions not visible prior to work beginning. Any repairs required to address pre-existing conditions are outside the scope of this contract and will be handled through a separate written Change Order." />
+                <InitRow label="LANDSCAPING, FENCING &amp; PROPERTY FEATURES" text="Salas Concrete Inc. will take reasonable care to protect adjacent landscaping, fencing, and property features. However, some incidental contact, root damage, or disturbance to plantings, lawn areas, fencing, and adjacent surfaces near the work zone is unavoidable during demolition and construction. Salas Concrete Inc. is not responsible for incidental damage within or immediately adjacent to the active work area unless caused by gross negligence." />
+                <div style={{ border:`1px solid ${N}`, background:NL, padding:"12px 16px", margin:"10px 0" }}>
+                  <p style={{ fontWeight:"bold", color:N, marginBottom:12 }}>By signing below, Owner confirms they have read, understand, and accept all demolition liability conditions above.</p>
+                  <SigLine label="Owner Signature — Demolition Liability Acknowledgment" />
+                </div>
+                </div>
+
+                {/* S8 stamped optional */}
+                {d.stamped && (
+                  <div className="pbr">
+                  <SecBar n="8" t="Stamped Concrete Expectations Acknowledgment" />
+                  <p>Stamped concrete is a decorative, hand-finished product. Because of the nature of the process, some variation in texture, depth, and appearance is normal. In certain areas, especially near the house, walls, edges, corners, or tight spaces, the stamp pattern may not fully imprint. These areas may appear lighter, less detailed, or have little to no texture. This happens because our crew cannot stand directly against structures or apply full pressure in tight areas without risking damage to the home or surrounding property. These areas, including any blank spots or lighter impressions, are normal and not considered defects. Color variation, shading differences, and minor imperfections are also normal with stamped concrete and are part of the finished look.</p>
+                  <InitRow label="STAMPED CONCRETE ACKNOWLEDGMENT" text="By initialing here, the customer confirms they understand and accept the stamped concrete conditions described above before work begins." />
+                  </div>
+                )}
+
+                <SecBar n={sn(9)} t="Warranty" />
+                <p>Salas Concrete Inc. provides an 18-month workmanship warranty covering defects in labor and installation. This warranty does not cover normal concrete characteristics described in the Acknowledgment section above, nor damage from owner misuse, improper maintenance, ground movement, tree root intrusion, acts of nature, or modifications made by third parties after completion. Manufacturer warranties on materials are passed through to Owner to the extent available.</p>
+
+                <SecBar n={sn(10)} t="Note About Extra Work and Change Orders" />
+                <p>Extra Work and Change Orders become part of the contract once the order is prepared in writing and signed by the parties prior to the commencement of any work covered by the new change order. The order must describe the scope of the extra work or change, the cost to be added or subtracted from the contract, and the effect the order will have on the schedule of progress payments.</p>
+                <p>You may not require the contractor to perform extra or change-order work without providing written authorization prior to commencement. Extra work or a change order is not enforceable against a buyer unless the change order identifies in writing: (1) the scope of work, (2) the amount to be added or subtracted, and (3) the effect on progress payments or completion date. The contractor's failure to comply with these requirements does not preclude recovery of compensation based upon legal or equitable remedies designed to prevent unjust enrichment.</p>
+                <p><strong>Change Orders and addendums must be signed and paid in full before any additional work proceeds. Verbal agreements to modify scope are not binding on Salas Concrete Inc.</strong></p>
+
+                <div className="pbr">
+                <SecBar n={sn(11)} t="General Terms &amp; Conditions" />
+                {[
+                  ["Entire Agreement.","This contract, including all attachments and signed Change Orders, constitutes the entire agreement between the parties and supersedes all prior oral or written representations."],
+                  ["Governing Law.","This contract is governed by the laws of the State of California. Disputes are subject to jurisdiction of Fresno County, California."],
+                  ["Attorney Fees.","In any legal dispute arising from this contract, the prevailing party is entitled to recover reasonable attorney fees and costs."],
+                  ["Permits.","Salas Concrete Inc. will obtain all required permits unless otherwise noted in writing. Owner is responsible for disclosing any HOA restrictions or CC&Rs prior to signing."],
+                  ["Delays.","Salas Concrete Inc. is not responsible for delays caused by weather, material availability, permit timelines, or other conditions outside of the contractor's reasonable control."],
+                  ["Lien Releases.","Upon satisfactory payment being made for any portion of the work performed, Salas Concrete Inc. shall furnish to Owner a full and unconditional release from any potential mechanics lien for that portion of the work for which payment has been made."],
+                  ["License Verification.","CA License #388578. Verify status at www.cslb.ca.gov or call 1-800-321-CSLB (2752)."],
+                ].map(([l,t])=>(
+                  <p key={l} style={{marginBottom:4}}><strong style={{color:N}}>{l}</strong>  {t}</p>
+                ))}
+
+                <SecBar n={sn(12)} t="Insurance Notices" />
+                <p><strong style={{color:N}}>COMMERCIAL GENERAL LIABILITY INSURANCE (CGL):</strong>  Salas Concrete Inc. carries commercial general liability insurance. Certificate of Insurance available upon request.</p>
+                <p><strong style={{color:N}}>WORKERS' COMPENSATION INSURANCE:</strong>  Salas Concrete Inc. carries workers' compensation insurance for all employees.</p>
+                <p>SUBCONTRACTOR NOTICE: One or more subcontractors may be used on this project. Upon request, Salas Concrete Inc. will provide a list of all subcontractors and material suppliers including their names, contact information, license number, and classification.</p>
+                <p><strong style={{color:N}}>PERFORMANCE AND PAYMENT BOND NOTICE:</strong>  You, the Owner, have the right to require Salas Concrete Inc. to have a performance and payment bond. If you require such a bond, contact the contractor before signing this agreement.</p>
+                </div>
+
+                <SecBar n={sn(13)} t="Information About the Contractors State License Board (CSLB)" />
+                <div style={{ border:`1px solid ${N}`, background:NL, padding:"10px 13px", marginBottom:14, fontSize:"8pt" }}>
+                  <strong style={{color:N}}>INFORMATION ABOUT THE CONTRACTORS STATE LICENSE BOARD (CSLB)</strong><br /><br />
+                  CSLB is the state consumer protection agency that licenses and regulates construction contractors. Contact CSLB for information about the licensed contractor you are considering, including information about disclosable complaints, disciplinary actions, and civil judgments that are reported to CSLB. Use only licensed contractors. If you file a complaint against a licensed contractor within the legal deadline (usually four years), CSLB has authority to investigate the complaint. If you use an unlicensed contractor, CSLB may not be able to help you resolve your complaint. Your only remedy may be in civil court, and you may be liable for damages arising out of any injuries to the unlicensed contractor or the unlicensed contractor's employees.<br /><br />
+                  <strong>VISIT</strong> www.cslb.ca.gov  |  <strong>CALL</strong> 1-800-321-CSLB (2752)  |  <strong>WRITE</strong> P.O. Box 26000, Sacramento, CA 95826
+                </div>
+
+                <div className="pbr">
+                <SecBar n={sn(14)} t="Cancellation Rights (Required by California Law)" />
+                <p style={{fontWeight:"bold", fontSize:"9.5pt"}}>THREE-DAY RIGHT TO CANCEL — All Owners  (B&amp;P Code Section 7159)</p>
+                <p style={{fontWeight:"bold"}}>You, the buyer, have the right to cancel this contract within three business days. You may cancel by e-mailing, mailing, faxing, or delivering a written notice to the contractor at the contractor's place of business by midnight of the third business day after you received a signed and dated copy of the contract that includes this notice. Include your name, your address, and the date you received the signed copy of the contract and this notice.</p>
+                <p>If you cancel, the contractor must return to you anything you paid within 10 days of receiving the notice of cancellation. If you do make the goods available to the contractor and the contractor does not pick them up within 20 days, you may keep them without any further obligation.</p>
+                <p style={{fontWeight:"bold", fontSize:"9.5pt", marginTop:10}}>FIVE-DAY RIGHT TO CANCEL — Senior Owners Age 65 or Older  (B&amp;P Code Section 7159.5 / AB 2471)</p>
+                <p style={{fontWeight:"bold"}}>If you are 65 years of age or older, California law gives you the right to cancel this contract within FIVE business days of signing.</p>
+                <InitRow label="SENIOR STATUS — check one" text="☐  I am 65 years of age or older          ☐  I am under 65" />
+
+                <SecBar n={sn(15)} t="Mechanics Lien Warning (Required by California Law)" />
+                <p>Anyone who helps improve your property, but who is not paid, may record what is called a mechanics lien on your property. A mechanics lien is a claim, like a mortgage or home equity loan, made against your property and recorded with the county recorder.</p>
+                <p>Even if you pay your contractor in full, unpaid subcontractors, suppliers, and laborers who helped to improve your property may record mechanics liens and sue you in court to foreclose the lien. If a court finds the lien is valid, you could be forced to pay twice or have a court officer sell your home to pay the lien.</p>
+                <p>To preserve their right to record a lien, each subcontractor and material supplier must provide you with a document called a <strong>"20-day Preliminary Notice."</strong> This notice is not a lien. <strong>BE CAREFUL</strong> — the Preliminary Notice can be sent up to 20 days after the subcontractor starts work. <strong>PROTECT YOURSELF FROM LIENS</strong> by getting a list from your contractor of all subcontractors and material suppliers. <strong>PAY WITH JOINT CHECKS</strong> when possible.</p>
+                <div style={{ border:"1px solid #CC0000", background:"#FFF0F0", padding:"8px 12px", marginBottom:12 }}>
+                  <strong>REMEMBER — IF YOU DO NOTHING, YOU RISK HAVING A LIEN PLACED ON YOUR HOME.</strong>  For more information: www.cslb.ca.gov  |  1-800-321-CSLB (2752)
+                </div>
+                </div>
+
+                {/* Signatures */}
+                <div className="pbr">
+                <SecBar n={sn(16)} t="Authorization &amp; Acceptance" />
+                <p>By signing below, Owner authorizes Salas Concrete Inc. to proceed with the scope of work described in this contract and agrees to all terms and payment obligations. Owner confirms they have read and understood all sections of this contract, including the Scope of Work, Payment Schedule, Concrete Characteristics Acknowledgment, Demolition Liability Acknowledgment, Insurance Notices, CSLB Board Notice, Cancellation Rights, and Mechanics Lien Warning. Owner further confirms that all initials provided throughout this document are their own.</p>
+                <div className="sig-grid" style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:24, marginTop:16 }}>
+                  <div>
+                    <div style={{fontWeight:"bold",color:N,marginBottom:6}}>CONTRACTOR</div>
+                    <div style={{marginBottom:8,fontSize:"8.5pt"}}>Salas Concrete Inc.  |  Aaron Salas, Owner</div>
+                    <SigLine label="Contractor Signature &amp; Date" />
+                  </div>
+                  <div>
+                    <div style={{fontWeight:"bold",color:N,marginBottom:6}}>OWNER / BUYER</div>
+                    <div style={{marginBottom:8,fontSize:"8.5pt",color:"#666"}}>If two owners, both must sign</div>
+                    <SigLine label="Owner Signature &amp; Date" />
+                    <SigLine label="Second Owner Signature &amp; Date (if applicable)" />
+                  </div>
+                </div>
+                <div style={{ borderTop:`2px solid ${G}`, marginTop:20, paddingTop:8, textAlign:"center", fontSize:"8pt", color:N, fontWeight:"bold" }}>
+                  Salas Concrete Inc.  |  CA License #388578  |  (559) 785-DECK / (559) 785-3325  |  salasconcrete.com  |  info@salasconcrete.com
+                </div>
+                </div>
+
+                {/* Cancellation Form */}
+                <div className="pbr">
+                <div style={{ textAlign:"center", color:"#888", fontStyle:"italic", fontSize:"8pt", marginBottom:12 }}>
+                  — DETACH AND KEEP — MAIL OR DELIVER THE OTHER COPY TO SALAS CONCRETE INC. —
+                </div>
+                <div style={{ border:`2px solid ${N}`, background:NL, padding:"22px 26px" }}>
+                  <div style={{ textAlign:"center", fontSize:"13pt", fontWeight:"bold", color:N, marginBottom:5 }}>NOTICE OF CANCELLATION</div>
+                  <div style={{ textAlign:"center", fontSize:"8.5pt", color:G, fontStyle:"italic", marginBottom:5 }}>California Civil Code Section 1689.5  /  B&amp;P Code Section 7159</div>
+                  <div style={{ textAlign:"center", marginBottom:16 }}>Three-Day Right to Cancel  (Five Days if Owner is age 65 or older)</div>
+                  <div style={{ borderBottom:`1px solid ${G}`, paddingBottom:4, marginBottom:12 }}>
+                    <strong style={{color:N}}>Date of Transaction:</strong>  {d.contractDate}
+                  </div>
+                  <p>You may cancel this transaction, without any penalty or obligation, within three business days from the above date. (Five business days if you are age 65 or older.)</p>
+                  <p>If you cancel, any payments made by you under the contract or sale will be returned within 10 days following receipt by the seller of your cancellation notice, and any security interest arising out of the transaction will be canceled.</p>
+                  <p>If you cancel, you must make available to the seller at your residence, in substantially as good condition as when received, any goods delivered to you under this contract or sale, or you may comply with the instructions of the seller regarding the return shipment of the goods at the seller's expense and risk.</p>
+                  <p><strong style={{color:N}}>To cancel, mail or deliver a signed and dated copy of this notice to:</strong><br />
+                  Salas Concrete Inc.  |  Attn: Aaron Salas  |  1103 Brookhaven Dr #108, Clovis, CA 93612<br />
+                  (559) 785-DECK / (559) 785-3325  |  info@salasconcrete.com</p>
+                  <div style={{ borderBottom:`1px solid ${G}`, paddingBottom:4, marginBottom:14 }}>
+                    <strong style={{color:N}}>Not later than midnight of:</strong>  ___________________________________
+                  </div>
+                  <p style={{fontWeight:"bold",marginBottom:20}}>I HEREBY CANCEL THIS TRANSACTION.</p>
+                  <SigLine label="Buyer Signature" />
+                  <SigLine label="Printed Name" />
+                  <SigLine label="Date" />
+                </div>
+                </div>
+
+              </div>{/* end .co */}
+            </div>
+          )}
+
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+
+</body>
+</html>
